@@ -12,6 +12,12 @@ const (
 	APP_VERSION = "9.7.0"
 )
 
+type UserCompetitor struct {
+	Username  string `json:"username"`
+	Pk        int64 `json:"pk"`
+	IsPrivate bool `json:"is_private"`
+}
+
 var HOSTNAME = "i.instagram.com"
 var WEB_HOSTNAME = "www.instagram.com"
 var HOST = "https://" + HOSTNAME + "/"
@@ -27,7 +33,6 @@ func GetURL(name string, data interface{}) string {
 
 	var url bytes.Buffer
 	t.Execute(&url, data)
-
 	return url.String()
 }
 
@@ -46,6 +51,9 @@ var ROUTES = struct {
 	TimelineFeed         string
 	Like                 string
 	Unlike               string
+	Users 				 string
+	Followers			 string
+	Followings			 string
 }{
 	HOSTNAME:     HOSTNAME,
 	WEB_HOSTNAME: WEB_HOSTNAME,
@@ -61,4 +69,7 @@ var ROUTES = struct {
 	TimelineFeed:         API_ENDPOINT + "feed/timeline/?rank_token={{.RankToken}}{{if .MaxID}}&max_id={{.MaxID}}{{end}}&ranked_content=true",
 	Like:                 API_ENDPOINT + "media/{{.ID}}/like/",
 	Unlike:               API_ENDPOINT + "media/{{.ID}}/unlike/",
+	Users:			      API_ENDPOINT + "users/{{.ID}}/usernameinfo/",
+	Followers:			  API_ENDPOINT + "friendships/{{.ID}}/followers/?rank_token={{.RankToken}}{{if .MaxID}}&max_id={{.MaxID}}{{end}}",
+	Followings:			  API_ENDPOINT + "friendships/{{.ID}}/following/?rank_token={{.RankToken}}{{if .MaxID}}&max_id={{.MaxID}}{{end}}",
 }

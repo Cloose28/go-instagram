@@ -1,11 +1,11 @@
 package instagram
 
 import (
-	"github.com/hieven/go-instagram/models"
+	"github.com/hieven/go-instagram/InstagramModels"
 	"github.com/hieven/go-instagram/utils"
 )
 
-func Create(username string, password string) (*models.Instagram, error) {
+func Create(username string, password string) ( *models.Instagram, error) {
 	pool, err := utils.NewSuperAgentPool(1)
 	if err != nil {
 		return nil, err

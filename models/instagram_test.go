@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/hieven/go-instagram/constants"
-	. "github.com/hieven/go-instagram/models"
+	. "github.com/hieven/go-instagram/InstagramModels"
 	"github.com/hieven/go-instagram/testUtils"
 	"github.com/jarcoal/httpmock"
 	"github.com/parnurzeal/gorequest"

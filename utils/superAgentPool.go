@@ -1,9 +1,10 @@
 package utils
 
-import (
+import
+(
 	"errors"
 	"sync"
-
+ 	"crypto/tls"
 	"github.com/parnurzeal/gorequest"
 )
 
@@ -22,7 +23,7 @@ func NewSuperAgentPool(capacity int) (*SuperAgentPool, error) {
 	}
 
 	for i := 0; i < capacity; i++ {
-		agent := gorequest.New()
+		agent := gorequest.New().TLSClientConfig(&tls.Config{ InsecureSkipVerify: true})
 		if agent == nil {
 			return nil, errors.New("unable to create gorequest.SuperAgent")
 		}
