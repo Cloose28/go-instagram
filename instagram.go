@@ -1,8 +1,8 @@
 package instagram
 
 import (
-	"github.com/hieven/go-instagram/InstagramModels"
-	"github.com/hieven/go-instagram/utils"
+	"github.com/Cloose28/go-instagram/models"
+	"github.com/Cloose28/go-instagram/utils"
 )
 
 func Create(username string, password string) ( *models.Instagram, error) {
