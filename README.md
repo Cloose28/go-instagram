@@ -7,7 +7,7 @@ This project is for study and personal use only. We hold no responsibilty of any
 ## Installation
 
 ```sh
-$ go get github.com/hieven/go-instagram
+$ go get github.com/Cloose28/go-instagram
 ```
 
 ## Documentation
@@ -22,6 +22,7 @@ You can use this repo to:
 - get timeline feed
 - get ranked media / recent media of a location
 - get inbox messages
+- get followers/followings
 - broadcast to any inbox thread
 - approve pending inbox thread
 
