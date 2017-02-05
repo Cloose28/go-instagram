@@ -18,6 +18,13 @@ type UserCompetitor struct {
 	IsPrivate bool `json:"is_private"`
 }
 
+type MediaItem struct {
+	User  UserCompetitor `json:"user"`
+	CommentsCount int64 `json:"comment_count"`
+	LikesCount int64 `json:"like_count"`
+	MediaType int64 `json:"media_type"`
+}
+
 var HOSTNAME = "i.instagram.com"
 var WEB_HOSTNAME = "www.instagram.com"
 var HOST = "https://" + HOSTNAME + "/"
@@ -54,6 +61,7 @@ var ROUTES = struct {
 	Users 				 string
 	Followers			 string
 	Followings			 string
+	TagFeed              string
 }{
 	HOSTNAME:     HOSTNAME,
 	WEB_HOSTNAME: WEB_HOSTNAME,
@@ -70,6 +78,7 @@ var ROUTES = struct {
 	Like:                 API_ENDPOINT + "media/{{.ID}}/like/",
 	Unlike:               API_ENDPOINT + "media/{{.ID}}/unlike/",
 	Users:			      API_ENDPOINT + "users/{{.ID}}/usernameinfo/",
+	TagFeed:              API_ENDPOINT + "feed/tag/{{.ID}}/?{{if .MaxID}}&max_id={{.MaxID}}{{end}}",
 	Followers:			  API_ENDPOINT + "friendships/{{.ID}}/followers/?rank_token={{.RankToken}}{{if .MaxID}}&max_id={{.MaxID}}{{end}}",
 	Followings:			  API_ENDPOINT + "friendships/{{.ID}}/following/?rank_token={{.RankToken}}{{if .MaxID}}&max_id={{.MaxID}}{{end}}",
 }

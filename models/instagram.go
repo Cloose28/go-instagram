@@ -25,16 +25,23 @@ type DefaultResponse struct {
 
 type FollowingResponse struct {
 	Status    string `json:"status"`
-	Message string `json:"message"`
+	Message   string `json:"message"`
 	NextMaxId int64 `json:"next_max_id"`
 	Users     json.RawMessage `json:"users"`
 }
 
 type FollowersResponse struct {
 	Status    string `json:"status"`
-	Message string `json:"message"`
+	Message   string `json:"message"`
 	NextMaxId string `json:"next_max_id"`
 	Users     json.RawMessage `json:"users"`
+}
+
+type HashtagFeedResponse struct {
+	Status    string `json:"status"`
+	Message   string `json:"message"`
+	NextMaxId string `json:"next_max_id"`
+	Items     json.RawMessage `json:"items"`
 }
 
 type AboutUserResponse struct {
@@ -67,6 +74,11 @@ type likeRequest struct {
 	MediaID string `json:"media_id"`
 	Src     string `json:"src"`
 	loginRequest
+}
+
+type HashtagFeedParams struct {
+	ID    string
+	MaxID string
 }
 
 type FollowParams struct {
@@ -111,6 +123,43 @@ func (ig *Instagram) Login() error {
 	return nil
 }
 
+func (ig *Instagram) GetHashtagFeed(tag string, maxId string) ([]constants.MediaItem, string, error) {
+	params := HashtagFeedParams{
+		ID: tag,
+	}
+	if maxId != "" {
+		params.MaxID = maxId
+	}
+
+	url := constants.GetURL("TagFeed", params)
+
+	agent := ig.AgentPool.Get()
+
+	defer ig.AgentPool.Put(agent)
+
+	_, body, err := ig.SendRequest(agent.Get(url).
+			Type("form"))
+	if err != nil {
+		return nil, "", errors.New("error request")
+	}
+
+	var resp HashtagFeedResponse
+	json.Unmarshal([]byte(body), &resp)
+
+	if resp.Status == "fail" {
+		return nil, "", errors.New(resp.Message)
+	}
+
+	var items []constants.MediaItem
+	if resp.Status == "ok" {
+		json.Unmarshal(resp.Items, &items)
+	} else {
+		return nil, "Repeat", nil
+	}
+
+	return items, resp.NextMaxId, nil
+}
+
 func (ig *Instagram) GetUserFollowing(userId string, maxId string) ([]constants.UserCompetitor, string, error) {
 	params := FollowParams{
 		ID: userId,
@@ -129,14 +178,14 @@ func (ig *Instagram) GetUserFollowing(userId string, maxId string) ([]constants.
 	_, body, err := ig.SendRequest(agent.Get(url).
 			Type("form"))
 	if err != nil {
-		return nil,"", errors.New("error request")
+		return nil, "", errors.New("error request")
 	}
 
 	var resp FollowingResponse
 	json.Unmarshal([]byte(body), &resp)
 
 	if resp.Status == "fail" {
-		return nil,"", errors.New(resp.Message)
+		return nil, "", errors.New(resp.Message)
 	}
 
 	var users []constants.UserCompetitor
@@ -151,8 +200,8 @@ func (ig *Instagram) GetUserFollowing(userId string, maxId string) ([]constants.
 
 func (ig *Instagram) GetUserFollowers(userId string, maxId string) ([]constants.UserCompetitor, string, error) {
 	params := FollowParams{
-				ID: userId,
-				RankToken: utils.GenerateRankToken(userId),
+		ID: userId,
+		RankToken: utils.GenerateRankToken(userId),
 	}
 	if maxId != "" {
 		params.MaxID = maxId
@@ -167,14 +216,14 @@ func (ig *Instagram) GetUserFollowers(userId string, maxId string) ([]constants.
 	_, body, err := ig.SendRequest(agent.Get(url).
 			Type("form"))
 	if err != nil {
-		return nil,"", errors.New("error request")
+		return nil, "", errors.New("error request")
 	}
 
 	var resp FollowersResponse
 	json.Unmarshal([]byte(body), &resp)
 
 	if resp.Status == "fail" {
-		return nil,"", errors.New(resp.Message)
+		return nil, "", errors.New(resp.Message)
 	}
 
 	var users []constants.UserCompetitor
@@ -313,6 +362,5 @@ func (ig *Instagram) SendRequest(agent *gorequest.SuperAgent) (gorequest.Respons
 			Set("Accept-Language", "en-US").
 			Set("Host", constants.HOSTNAME).
 			Set("User-Agent", "Instagram " + constants.APP_VERSION + " Android (21/5.1.1; 401dpi; 1080x1920; Oppo; A31u; A31u; en_US)").
-			//Proxy("http://localhost:8080").
 			End()
 }
