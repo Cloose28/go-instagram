@@ -12,6 +12,7 @@ import (
 type Instagram struct {
 	Username     string
 	Password     string
+	Proxy		 string
 	loggedInUser
 	AgentPool    *utils.SuperAgentPool
 	Inbox        *Inbox
@@ -109,15 +110,15 @@ func (ig *Instagram) Login() error {
 				Type("multipart").
 				Send(string(jsonData)))
 
-		var resp loginResponse
-		json.Unmarshal([]byte(body), &resp)
+		var loginResponse loginResponse
+		json.Unmarshal([]byte(body), &loginResponse)
 
-		if resp.Status == "fail" {
-			return errors.New(resp.Message)
+		if loginResponse.Status == "fail" {
+			return errors.New(loginResponse.Message)
 		}
 
 		// store user info
-		ig.Pk = resp.LoggedInUser.Pk
+		ig.Pk = loginResponse.LoggedInUser.Pk
 	}
 
 	return nil
@@ -140,7 +141,7 @@ func (ig *Instagram) GetHashtagFeed(tag string, maxId string) ([]constants.Media
 	_, body, err := ig.SendRequest(agent.Get(url).
 			Type("form"))
 	if err != nil {
-		return nil, "", errors.New("error request")
+		return nil, "", err[0]
 	}
 
 	var resp HashtagFeedResponse
@@ -256,7 +257,7 @@ func (ig *Instagram) GetUserIdByName(userName string) (string, error) {
 			Type("multipart").
 			Send(string(jsonData)))
 	if err != nil {
-		return "", errors.New("error request")
+		return "", err[0]
 	}
 
 	var resp AboutUserResponse
@@ -354,6 +355,9 @@ func (ig *Instagram) CreateSignature() (sigVersion string, signedBody string) {
 }
 
 func (ig *Instagram) SendRequest(agent *gorequest.SuperAgent) (gorequest.Response, string, []error) {
+	if (ig.Proxy != "") {
+		agent.Proxy(ig.Proxy)
+	}
 	return agent.
 	Set("Connection", "close").
 			Set("Accept", "*/*").
