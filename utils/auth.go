@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 
 	"github.com/hieven/go-instagram/constants"
-	UUID "github.com/satori/go.uuid"
+	uuid2 "github.com/satori/go.uuid"
 )
 
 func GenerateSignature(data []byte) (sigVersion string, signedBody string) {
@@ -23,7 +23,7 @@ func GenerateSignature(data []byte) (sigVersion string, signedBody string) {
 }
 
 func GenerateUUID() (uuid string) {
-	uuid = UUID.NewV4().String()
+	uuid = uuid2.Must(uuid2.NewV4()).String()
 
 	return uuid
 }

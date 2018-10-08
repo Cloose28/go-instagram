@@ -9,13 +9,14 @@ import (
 const (
 	SIG_KEY     = "2f6dcdf76deb0d3fd008886d032162a79b88052b5f50538c1ee93c4fe7d02e60"
 	SIG_VERSION = "4"
-	APP_VERSION = "9.7.0"
+	APP_VERSION = "10.8.0"
 )
 
 type UserCompetitor struct {
 	Username  string `json:"username"`
 	Pk        int64 `json:"pk"`
 	IsPrivate bool `json:"is_private"`
+	FullName string `json:"full_name"`
 }
 
 type MediaItem struct {
@@ -23,6 +24,15 @@ type MediaItem struct {
 	CommentsCount int64 `json:"comment_count"`
 	LikesCount int64 `json:"like_count"`
 	MediaType int64 `json:"media_type"`
+}
+
+type TagIntersect struct {
+	User struct{
+		Username string `json:"username"`
+	} `json:"user"`
+	Caption struct {
+		Text string `json:"text"`
+	} `json:"caption"`
 }
 
 var HOSTNAME = "i.instagram.com"
