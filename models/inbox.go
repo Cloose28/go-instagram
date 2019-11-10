@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/hieven/go-instagram/constants"
-	"github.com/hieven/go-instagram/utils"
+	"github.com/Cloose28/go-instagram/constants"
+	"github.com/Cloose28/go-instagram/utils"
 )
 
 // Inbox type

@@ -7,27 +7,69 @@ import (
 )
 
 const (
-	SIG_KEY     = "2f6dcdf76deb0d3fd008886d032162a79b88052b5f50538c1ee93c4fe7d02e60"
-	SIG_VERSION = "4"
-	APP_VERSION = "10.8.0"
+	SIG_KEY       = "2f6dcdf76deb0d3fd008886d032162a79b88052b5f50538c1ee93c4fe7d02e60"
+	SIG_VERSION   = "4"
+	APP_VERSION   = "10.8.0"
+	TAG_FEED      = "TagFeed"
+	LOCATION_FEED = "LocationFeed"
 )
+
+type UserId struct {
+	Pk int64 `json:"pk"`
+}
 
 type UserCompetitor struct {
 	Username  string `json:"username"`
-	Pk        int64 `json:"pk"`
-	IsPrivate bool `json:"is_private"`
-	FullName string `json:"full_name"`
+	Pk        int64  `json:"pk"`
+	IsPrivate bool   `json:"is_private"`
+	FullName  string `json:"full_name"`
+}
+
+type Location struct {
+	LocationId struct {
+		Pk int64 `json:"pk"`
+	} `json:"location"`
+}
+
+type Content struct {
+	Medias []MediaItem `json:"medias"`
+}
+
+type Section struct {
+	LayoutContent Content `json:"layout_content"`
 }
 
 type MediaItem struct {
-	User  UserCompetitor `json:"user"`
-	CommentsCount int64 `json:"comment_count"`
-	LikesCount int64 `json:"like_count"`
-	MediaType int64 `json:"media_type"`
+	Pk            int64          `json:"pk"`
+	User          UserCompetitor `json:"user"`
+	CommentsCount int64          `json:"comment_count"`
+	LikesCount    int64          `json:"like_count"`
+	MediaType     int64          `json:"media_type"`
+}
+
+type Media struct {
+	Pk            int            `json:"pk"`
+	User          UserCompetitor `json:"user"`
+	CommentsCount int            `json:"comment_count"`
+	LikesCount    int            `json:"like_count"`
+	MediaType     int            `json:"media_type"`
+}
+
+type LocationSection struct {
+	LayoutType    string                        `json:"layout_type"`
+	LayoutContent *LocationSectionLayoutContent `json:"layout_content"`
+}
+
+type LocationSectionLayoutContent struct {
+	Medias []*LocationSectionLayoutContentMedias `json:"medias"`
+}
+
+type LocationSectionLayoutContentMedias struct {
+	Media *MediaItem `json:"media"`
 }
 
 type TagIntersect struct {
-	User struct{
+	User struct {
 		Username string `json:"username"`
 	} `json:"user"`
 	Caption struct {
@@ -59,36 +101,46 @@ var ROUTES = struct {
 	HOST         string
 	WEBHOST      string
 
+	Comments             string
 	ThreadsBroadcastText string
 	Inbox                string
 	Login                string
 	LocationFeed         string
+	LocationSearch       string
+	LocationSections     string
 	ThreadsApproveAll    string
 	ThreadsShow          string
 	TimelineFeed         string
 	Like                 string
+	Likers               string
 	Unlike               string
-	Users 				 string
-	Followers			 string
-	Followings			 string
+	Users                string
+	Followers            string
+	Followings           string
 	TagFeed              string
+	UserFeed             string
 }{
 	HOSTNAME:     HOSTNAME,
 	WEB_HOSTNAME: WEB_HOSTNAME,
 	HOST:         HOST,
 	WEBHOST:      WEBHOST,
 
+	Comments:             API_ENDPOINT + "media/{{.ID}}/comments/?rank_token={{.RankToken}}{{if .MaxID}}&max_id={{.MaxID}}{{end}}",
 	ThreadsBroadcastText: API_ENDPOINT + "direct_v2/threads/broadcast/text/",
 	Inbox:                API_ENDPOINT + "direct_v2/inbox/",
 	Login:                API_ENDPOINT + "accounts/login/",
-	LocationFeed:         API_ENDPOINT + "feed/location/",
+	LocationFeed:         API_ENDPOINT + "feed/location/{{.ID}}/?{{if .MaxID}}&max_id={{.MaxID}}{{end}}",
+	LocationSearch:       API_ENDPOINT + "fbsearch/places/?query={{.Query}}&rank_token={{.RankToken}}{{if .MaxID}}&max_id={{.MaxID}}{{end}}",
+	LocationSections:     API_ENDPOINT + "locations/{{.ID}}/sections/?{{if .MaxID}}&max_id={{.MaxID}}{{end}}",
 	ThreadsApproveAll:    API_ENDPOINT + "direct_v2/threads/approve_all/",
 	ThreadsShow:          API_ENDPOINT + "direct_v2/threads/",
 	TimelineFeed:         API_ENDPOINT + "feed/timeline/?rank_token={{.RankToken}}{{if .MaxID}}&max_id={{.MaxID}}{{end}}&ranked_content=true",
 	Like:                 API_ENDPOINT + "media/{{.ID}}/like/",
+	Likers:               API_ENDPOINT + "media/{{.ID}}/likers/?rank_token={{.RankToken}}{{if .MaxID}}&max_id={{.MaxID}}{{end}}",
 	Unlike:               API_ENDPOINT + "media/{{.ID}}/unlike/",
-	Users:			      API_ENDPOINT + "users/{{.ID}}/usernameinfo/",
+	Users:                API_ENDPOINT + "users/{{.ID}}/usernameinfo/",
 	TagFeed:              API_ENDPOINT + "feed/tag/{{.ID}}/?{{if .MaxID}}&max_id={{.MaxID}}{{end}}",
-	Followers:			  API_ENDPOINT + "friendships/{{.ID}}/followers/?rank_token={{.RankToken}}{{if .MaxID}}&max_id={{.MaxID}}{{end}}",
-	Followings:			  API_ENDPOINT + "friendships/{{.ID}}/following/?rank_token={{.RankToken}}{{if .MaxID}}&max_id={{.MaxID}}{{end}}",
+	UserFeed:             API_ENDPOINT + "feed/user/{{.ID}}/?rank_token={{.RankToken}}{{if .MaxID}}&max_id={{.MaxID}}{{end}}",
+	Followers:            API_ENDPOINT + "friendships/{{.ID}}/followers/?rank_token={{.RankToken}}{{if .MaxID}}&max_id={{.MaxID}}{{end}}",
+	Followings:           API_ENDPOINT + "friendships/{{.ID}}/following/?rank_token={{.RankToken}}{{if .MaxID}}&max_id={{.MaxID}}{{end}}",
 }

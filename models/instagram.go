@@ -1,23 +1,34 @@
 package models
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"errors"
-	"strconv"
-	"strings"
+	"fmt"
 	"github.com/Cloose28/go-instagram/constants"
 	"github.com/Cloose28/go-instagram/utils"
+	"github.com/hieven/go-instagram/src/protos"
 	"github.com/parnurzeal/gorequest"
+	"log"
+	"net/http"
+	"strings"
+	"time"
+
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	uuid "github.com/satori/go.uuid"
 )
 
 type Instagram struct {
 	Username     string
 	Password     string
 	Proxy        string
-	loggedInUser
+	Pk           int64
 	AgentPool    *utils.SuperAgentPool
 	Inbox        *Inbox
 	TimelineFeed *TimelineFeed
+	Cookies []*http.Cookie
 }
 
 type DefaultResponse struct {
@@ -25,31 +36,46 @@ type DefaultResponse struct {
 	Message string `json:"message"`
 }
 
-type FollowingResponse struct {
-	Status    string          `json:"status"`
-	Message   string          `json:"message"`
-	NextMaxId int64           `json:"next_max_id"`
-	Users     json.RawMessage `json:"users"`
-}
-
-type FollowersResponse struct {
-	Status    string          `json:"status"`
-	Message   string          `json:"message"`
-	NextMaxId string          `json:"next_max_id"`
-	Users     json.RawMessage `json:"users"`
-}
-
-type HashtagFeedResponse struct {
-	Status    string          `json:"status"`
-	Message   string          `json:"message"`
+type PostsResponse struct {
+	DefaultResponse
 	NextMaxId string          `json:"next_max_id"`
 	Items     json.RawMessage `json:"items"`
 }
 
+type UsersResponse struct {
+	DefaultResponse
+	NextMaxId string          `json:"next_max_id"`
+	Users     json.RawMessage `json:"users"`
+}
+
+type CommentsResponse struct {
+	DefaultResponse
+	NextMaxId string          `json:"next_max_id"`
+	Comments  json.RawMessage `json:"comments"`
+}
+
+type ItemsResponse struct {
+	DefaultResponse
+	NextMaxId string          `json:"next_max_id"`
+	Items     json.RawMessage `json:"items"`
+}
+
+type SectionResponse struct {
+	DefaultResponse
+	NextMaxId string    `json:"next_max_id"`
+	Sections  []constants.Section `json:"sections"`
+}
+
+
+type LocationSectionResponse struct {
+	DefaultResponse
+	NextMaxId string    `json:"next_max_id"`
+	Sections []*constants.LocationSection `json:"sections"`
+}
+
 type AboutUserResponse struct {
-	User    loggedInUser `json:"user"`
-	Status  string       `json:"status"`
-	Message string       `json:"message"`
+	DefaultResponse
+	User LoggedInUser `json:"user"`
 }
 
 type loginRequest struct {
@@ -64,12 +90,13 @@ type loginRequestWithMaxId struct {
 }
 
 type loginResponse struct {
-	LoggedInUser loggedInUser `json:"logged_in_user"`
+	LoggedInUser LoggedInUser `json:"logged_in_user"`
 	DefaultResponse
 }
 
-type loggedInUser struct {
-	Pk int64 `json:"pk"`
+type LoggedInUser struct {
+	Pk            int64 `json:"pk"`
+	FollowerCount int   `json:"follower_count"`
 }
 
 type likeRequest struct {
@@ -83,7 +110,7 @@ type HashtagFeedParams struct {
 	MaxID string
 }
 
-type FollowParams struct {
+type DefaultParams struct {
 	ID        string
 	RankToken string
 	MaxID     string
@@ -93,7 +120,7 @@ type likeResponse struct {
 	DefaultResponse
 }
 
-func (ig *Instagram) Login() error {
+func (ig *Instagram) Login() (cookies []string, err error) {
 	for i := 0; i < ig.AgentPool.Len(); i++ {
 		igSigKeyVersion, signedBody := ig.CreateSignature()
 
@@ -107,25 +134,31 @@ func (ig *Instagram) Login() error {
 		agent := ig.AgentPool.Get()
 		defer ig.AgentPool.Put(agent)
 
-		_, body, _ := ig.SendRequest(agent.Post(constants.ROUTES.Login).
+		resp, body, _ := ig.SendRequest(agent.Post(constants.ROUTES.Login).
 			Type("multipart").
 			Send(string(jsonData)))
 
 		var loginResponse loginResponse
 		json.Unmarshal([]byte(body), &loginResponse)
-
 		if loginResponse.Status == "fail" {
-			return errors.New(loginResponse.Message)
+			return cookies, errors.New(loginResponse.Message)
 		}
 
 		// store user info
 		ig.Pk = loginResponse.LoggedInUser.Pk
+		log.Println(resp.Header["Set-Cookie"])
+		//ig.Cookies = setCookies(resp.Header["Set-Cookie"])
+		cookies = resp.Header["Set-Cookie"]
 	}
 
-	return nil
+	return 
 }
 
-func (ig *Instagram) GetHashtagFeed(tag string, maxId string) (json.RawMessage, string, error) {
+//func setCookies(cookies []string) []http.Cookie {
+//	var cookie []http.Cookie
+//}
+
+func (ig *Instagram) GetFeedOf(feedName, tag, maxId string) (json.RawMessage, string, error) {
 	params := HashtagFeedParams{
 		ID: tag,
 	}
@@ -133,7 +166,7 @@ func (ig *Instagram) GetHashtagFeed(tag string, maxId string) (json.RawMessage, 
 		params.MaxID = maxId
 	}
 
-	url := constants.GetURL("TagFeed", params)
+	url := constants.GetURL(feedName, params)
 
 	agent := ig.AgentPool.Get()
 
@@ -145,7 +178,7 @@ func (ig *Instagram) GetHashtagFeed(tag string, maxId string) (json.RawMessage, 
 		return nil, "", err[0]
 	}
 
-	var resp HashtagFeedResponse
+	var resp ItemsResponse
 	json.Unmarshal([]byte(body), &resp)
 
 	if resp.Status == "fail" {
@@ -160,7 +193,7 @@ func (ig *Instagram) GetHashtagFeed(tag string, maxId string) (json.RawMessage, 
 }
 
 func (ig *Instagram) GetUserFollowing(userId string, maxId string) ([]constants.UserCompetitor, string, error) {
-	params := FollowParams{
+	params := DefaultParams{
 		ID:        userId,
 		RankToken: utils.GenerateRankToken(userId),
 	}
@@ -180,7 +213,7 @@ func (ig *Instagram) GetUserFollowing(userId string, maxId string) ([]constants.
 		return nil, "", errors.New("error request")
 	}
 
-	var resp FollowingResponse
+	var resp UsersResponse
 	json.Unmarshal([]byte(body), &resp)
 
 	if resp.Status == "fail" {
@@ -191,14 +224,14 @@ func (ig *Instagram) GetUserFollowing(userId string, maxId string) ([]constants.
 	if resp.Status == "ok" {
 		json.Unmarshal(resp.Users, &users)
 	} else {
-		return nil, "Repeat", nil
+		return nil, "Repeat", errors.New(fmt.Sprintf("%v", resp))
 	}
 
-	return users, strconv.FormatInt(resp.NextMaxId, 10), nil
+	return users, resp.NextMaxId, nil
 }
 
 func (ig *Instagram) GetUserFollowers(userId string, maxId string) ([]constants.UserCompetitor, string, error) {
-	params := FollowParams{
+	params := DefaultParams{
 		ID:        userId,
 		RankToken: utils.GenerateRankToken(userId),
 	}
@@ -218,7 +251,7 @@ func (ig *Instagram) GetUserFollowers(userId string, maxId string) ([]constants.
 		return nil, "", errors.New("error request")
 	}
 
-	var resp FollowersResponse
+	var resp UsersResponse
 	json.Unmarshal([]byte(body), &resp)
 
 	if resp.Status == "fail" {
@@ -229,13 +262,185 @@ func (ig *Instagram) GetUserFollowers(userId string, maxId string) ([]constants.
 	if resp.Status == "ok" {
 		json.Unmarshal(resp.Users, &users)
 	} else {
-		return nil, "Repeat", nil
+		return nil, "Repeat", errors.New(fmt.Sprintf("%v", resp))
 	}
 
 	return users, resp.NextMaxId, nil
 }
 
-func (ig *Instagram) GetUserIdByName(userName string) (string, error) {
+type LocationSectionRequest struct {
+	Tab  string `json:"tab"`
+	UUID string `json:"_uuid"`
+}
+
+type LocationSectionTab string
+
+const (
+	LocationSectionTabRanked LocationSectionTab = "ranked"
+	LocationSectionTabRecent LocationSectionTab = "recent"
+)
+
+func (ig *Instagram) GetLocationSections(id, maxId, sectionTab string) ([]*constants.LocationSection, string, error) {
+	params := DefaultParams{
+		ID: id,
+	}
+	if maxId != "" {
+		params.MaxID = maxId
+	}
+
+	url := constants.GetURL("LocationSections", params)
+
+	agent := ig.AgentPool.Get()
+	defer ig.AgentPool.Put(agent)
+
+	internalReq := &protos.LocationSectionRequest{
+		UUID: utils.GenerateUUID(),
+		Tab:  sectionTab,
+	}
+
+	_, body, err := ig.SendRequest(agent.Post(url).
+		Type("multipart").
+		SendStruct(internalReq))
+	if err != nil {
+		return nil, "", err[0]
+	}
+
+	var resp LocationSectionResponse
+	json.Unmarshal([]byte(body), &resp)
+
+	if resp.Status == "fail" {
+		return nil, "", errors.New(resp.Message)
+	}
+
+	if resp.Status != "ok" {
+		return nil, "", errors.New(fmt.Sprintf("%v", resp))
+	}
+
+	return resp.Sections, resp.NextMaxId, nil
+}
+
+func (ig *Instagram) GetLocationIdByName(location, maxId string) ([]constants.Location, string, error) {
+	params := struct {
+		DefaultParams
+		Query string
+	}{
+		Query: location,
+	}
+	if maxId != "" {
+		params.MaxID = maxId
+	}
+
+	url := constants.GetURL("LocationSearch", params)
+
+	agent := ig.AgentPool.Get()
+	defer ig.AgentPool.Put(agent)
+
+	_, body, err := ig.SendRequest(agent.Get(url).
+		Type("form"))
+	if err != nil {
+		return nil, "", err[0]
+	}
+
+	var resp ItemsResponse
+	json.Unmarshal([]byte(body), &resp)
+
+	if resp.Status == "fail" {
+		return nil, "", errors.New(resp.Message)
+	}
+
+	var items []constants.Location
+	if resp.Status == "ok" {
+		json.Unmarshal(resp.Items, &items)
+	} else {
+		return nil, "", errors.New(fmt.Sprintf("%v", resp))
+	}
+
+	return items, resp.NextMaxId, nil
+}
+
+const (
+	SigCsrfToken = "missing"
+	SigDeviceID  = "android-b256317fd493b848"
+	SigKey       = "109513c04303341a7daf27bb41b268e633b30dcc65a3fe14503f743176113869"
+	SigVersion   = "4"
+	AppVersion   = "27.0.0.7.97"
+
+	Scheme   = "https"
+	Hostname = "i.instagram.com"
+
+	InstagramStatusFail = "fail"
+)
+
+func (ig *Instagram) GetUserByNameV2(userName string) (LoggedInUser, error) {
+	url := constants.GetURL("Users", struct{ ID string }{ID: userName})
+
+	sigPayload := &SignaturePayload{
+		Csrftoken:         SigCsrfToken,
+		DeviceID:          SigDeviceID,
+		UUID:              generateUUID(),
+		UserName:          ig.Username,
+		Password:          ig.Password,
+		LoginAttemptCount: 0,
+	}
+	igSigKeyVersion, signedBody, err := generateSignature(sigPayload)
+	if err != nil {
+		return LoggedInUser{}, err
+	}
+	payload := loginRequest{
+		IgSigKeyVersion: igSigKeyVersion,
+		SignedBody:      signedBody,
+	}
+	req := gorequest.New().
+		Post(url).
+		Type("multipart").
+		SendStruct(payload)
+	req.
+		Set("Connection", "close").
+		Set("Accept", "*/*").
+		Set("X-IG-Connection-Type", "WIFI").
+		Set("X-IG-Capabilities", "3QI=").
+		Set("Accept-Language", "en-US").
+		Set("Host", Hostname).
+		Set("User-Agent", "Instagram "+AppVersion+" Android (21/5.1.1; 401dpi; 1080x1920; Oppo; A31u; A31u; en_US)").
+		AddCookies(ig.Cookies)
+	resp, body, errs := req.End()
+
+	if len(errs) > 0 {
+		err = errs[0]
+	}
+	log.Println(resp)
+	log.Println(body)
+	return LoggedInUser{}, nil
+}
+type SignaturePayload struct {
+	Csrftoken         string `json:"_csrftoken"`
+	DeviceID          string `json:"device_id"`
+	UUID              string `json:"_uuid"`
+	UserName          string `json:"username"`
+	Password          string `json:"password"`
+	LoginAttemptCount int    `json:"login_attempt_count"`
+}
+
+func generateUUID() string {
+	return uuid.Must(uuid.NewV4()).String()
+}
+
+func generateSignature(payload *SignaturePayload) (string, string, error) {
+	payloadBytes, _ := json.Marshal(payload)
+
+	h := hmac.New(sha256.New, []byte(SigKey))
+	h.Write(payloadBytes)
+
+	var b []byte
+	hash := hex.EncodeToString(h.Sum(b))
+
+	sigVersion := SigVersion
+	signedBody := hash + "." + string(payloadBytes)
+
+	return sigVersion, signedBody, nil
+}
+
+func (ig *Instagram) GetUserByName(userName string) (LoggedInUser, error) {
 	url := constants.GetURL("Users", struct{ ID string }{ID: userName})
 
 	igSigKeyVersion, signedBody := ig.CreateSignature()
@@ -250,22 +455,135 @@ func (ig *Instagram) GetUserIdByName(userName string) (string, error) {
 	agent := ig.AgentPool.Get()
 
 	defer ig.AgentPool.Put(agent)
+	var resp AboutUserResponse
 
 	_, body, err := ig.SendRequest(agent.Get(url).
 		Type("multipart").
 		Send(string(jsonData)))
 	if err != nil {
-		return "", err[0]
+		return resp.User, err[0]
 	}
 
-	var resp AboutUserResponse
 	json.Unmarshal([]byte(body), &resp)
 
 	if resp.Status == "fail" {
-		return "", errors.New(resp.Message)
+		return resp.User, errors.New(resp.Message)
 	}
 
-	return strconv.FormatInt(resp.User.Pk, 10), nil
+	return resp.User, nil
+}
+
+func (ig *Instagram) GetPosts(userId, maxId string) ([]constants.MediaItem, string, error) {
+	params := DefaultParams{
+		ID:        userId,
+		RankToken: utils.GenerateRankToken(userId),
+	}
+	if maxId != "" {
+		params.MaxID = maxId
+	}
+	url := constants.GetURL("UserFeed", params)
+
+	agent := ig.AgentPool.Get()
+	defer ig.AgentPool.Put(agent)
+
+	_, body, err := ig.SendRequest(agent.Get(url).
+		Type("form"))
+	if err != nil {
+		return nil, "", errors.New("error request")
+	}
+
+	var resp PostsResponse
+	json.Unmarshal([]byte(body), &resp)
+
+	if resp.Status == "fail" {
+		return nil, "", errors.New(resp.Message)
+	}
+
+	var items []constants.MediaItem
+	if resp.Status == "ok" {
+		json.Unmarshal(resp.Items, &items)
+	} else {
+		return nil, "Repeat", errors.New(fmt.Sprintf("%v", resp))
+	}
+
+	return items, resp.NextMaxId, nil
+}
+
+func (ig *Instagram) GetLikers(mediaId, maxId string) ([]constants.UserCompetitor, string, error) {
+	params := DefaultParams{
+		ID:        mediaId,
+		RankToken: utils.GenerateRankToken(mediaId),
+	}
+	if maxId != "" {
+		params.MaxID = maxId
+	}
+	url := constants.GetURL("Likers", params)
+
+	agent := ig.AgentPool.Get()
+	defer ig.AgentPool.Put(agent)
+
+	_, body, err := ig.SendRequest(agent.Get(url).
+		Type("form"))
+	if err != nil {
+		return nil, "", errors.New("error request")
+	}
+
+	var resp UsersResponse
+	json.Unmarshal([]byte(body), &resp)
+
+	if resp.Status == "fail" {
+		return nil, "", errors.New(resp.Message)
+	}
+
+	var users []constants.UserCompetitor
+	if resp.Status == "ok" {
+		json.Unmarshal(resp.Users, &users)
+	} else {
+		return nil, "Repeat", errors.New(fmt.Sprintf("%v", resp))
+	}
+
+	return users, resp.NextMaxId, nil
+}
+
+func (ig *Instagram) GetComments(mediaId, maxId string) ([]constants.UserCompetitor, string, error) {
+	params := DefaultParams{
+		ID:        mediaId,
+		RankToken: utils.GenerateRankToken(mediaId),
+	}
+	if maxId != "" {
+		params.MaxID = maxId
+	}
+	url := constants.GetURL("Comments", params)
+
+	agent := ig.AgentPool.Get()
+	defer ig.AgentPool.Put(agent)
+
+	_, body, err := ig.SendRequest(agent.Get(url).
+		Type("form"))
+	if err != nil {
+		return nil, "", errors.New("error request")
+	}
+
+	var resp CommentsResponse
+	json.Unmarshal([]byte(body), &resp)
+
+	if resp.Status == "fail" {
+		return nil, "", errors.New(resp.Message)
+	}
+
+	var users [] struct {
+		User constants.UserCompetitor `json:"user"`
+	}
+	if resp.Status == "ok" {
+		json.Unmarshal(resp.Comments, &users)
+	} else {
+		return nil, "Repeat", errors.New(fmt.Sprintf("%v", resp))
+	}
+	result := make([]constants.UserCompetitor, 0)
+	for _, user := range users {
+		result = append(result, user.User)
+	}
+	return result, resp.NextMaxId, nil
 }
 
 func (ig *Instagram) Like(mediaID string) error {
@@ -353,10 +671,16 @@ func (ig *Instagram) CreateSignature() (sigVersion string, signedBody string) {
 }
 
 func (ig *Instagram) SendRequest(agent *gorequest.SuperAgent) (gorequest.Response, string, []error) {
-	if (ig.Proxy != "") {
+	if ig.Proxy != "" {
 		agent.Proxy(ig.Proxy)
 	}
+	transCfg := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // ignore expired SSL certificates
+	}
+	agent.Client = &http.Client{Transport: transCfg}
+	agent.Proxy("http://127.0.0.1:8080")
 	return agent.
+		Timeout(time.Minute).
 		Set("Connection", "close").
 		Set("Accept", "*/*").
 		Set("X-IG-Connection-Type", "WIFI").

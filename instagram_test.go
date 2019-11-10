@@ -3,7 +3,7 @@ package instagram_test
 import (
 	"testing"
 
-	. "github.com/hieven/go-instagram"
+	. "github.com/Cloose28/go-instagram"
 	"github.com/stretchr/testify/assert"
 )
 

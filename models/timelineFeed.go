@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/hieven/go-instagram/constants"
+	"github.com/Cloose28/go-instagram/constants"
 )
 
 type RankTokenGenerator interface {

@@ -1,7 +1,7 @@
 package testUtils
 
 import (
-	"github.com/hieven/go-instagram/utils"
+	"github.com/Cloose28/go-instagram/utils"
 	"github.com/jarcoal/httpmock"
 )
 
