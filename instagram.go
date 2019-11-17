@@ -5,7 +5,7 @@ import (
 	"github.com/Cloose28/go-instagram/utils"
 )
 
-func Create(username string, password string) ( *models.Instagram, error) {
+func Create(username string, password string) (*models.Instagram, error) {
 	pool, err := utils.NewSuperAgentPool(1)
 	if err != nil {
 		return nil, err

@@ -4,8 +4,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/Cloose28/go-instagram/constants"
 	. "github.com/Cloose28/go-instagram/InstagramModels"
+	"github.com/Cloose28/go-instagram/constants"
 	"github.com/Cloose28/go-instagram/testUtils"
 	"github.com/jarcoal/httpmock"
 	"github.com/parnurzeal/gorequest"

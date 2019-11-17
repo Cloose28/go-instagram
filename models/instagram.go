@@ -1,7 +1,6 @@
 package models
 
 import (
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,15 +8,8 @@ import (
 	"github.com/Cloose28/go-instagram/utils"
 	"github.com/hieven/go-instagram/src/protos"
 	"github.com/parnurzeal/gorequest"
-	"log"
 	"net/http"
 	"strings"
-	"time"
-
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
-	uuid "github.com/satori/go.uuid"
 )
 
 type Instagram struct {
@@ -28,7 +20,7 @@ type Instagram struct {
 	AgentPool    *utils.SuperAgentPool
 	Inbox        *Inbox
 	TimelineFeed *TimelineFeed
-	Cookies []*http.Cookie
+	Cookies      []*http.Cookie
 }
 
 type DefaultResponse struct {
@@ -62,15 +54,14 @@ type ItemsResponse struct {
 
 type SectionResponse struct {
 	DefaultResponse
-	NextMaxId string    `json:"next_max_id"`
+	NextMaxId string              `json:"next_max_id"`
 	Sections  []constants.Section `json:"sections"`
 }
 
-
 type LocationSectionResponse struct {
 	DefaultResponse
-	NextMaxId string    `json:"next_max_id"`
-	Sections []*constants.LocationSection `json:"sections"`
+	NextMaxId string                       `json:"next_max_id"`
+	Sections  []*constants.LocationSection `json:"sections"`
 }
 
 type AboutUserResponse struct {
@@ -120,7 +111,7 @@ type likeResponse struct {
 	DefaultResponse
 }
 
-func (ig *Instagram) Login() (cookies []string, err error) {
+func (ig *Instagram) Login() (err error) {
 	for i := 0; i < ig.AgentPool.Len(); i++ {
 		igSigKeyVersion, signedBody := ig.CreateSignature()
 
@@ -134,29 +125,25 @@ func (ig *Instagram) Login() (cookies []string, err error) {
 		agent := ig.AgentPool.Get()
 		defer ig.AgentPool.Put(agent)
 
-		resp, body, _ := ig.SendRequest(agent.Post(constants.ROUTES.Login).
+		resp, body, err := ig.SendRequest(agent.Post(constants.ROUTES.Login).
 			Type("multipart").
 			Send(string(jsonData)))
+		if err != nil {
+			return err[0]
+		}
 
 		var loginResponse loginResponse
 		json.Unmarshal([]byte(body), &loginResponse)
 		if loginResponse.Status == "fail" {
-			return cookies, errors.New(loginResponse.Message)
+			return errors.New(loginResponse.Message)
 		}
 
 		// store user info
 		ig.Pk = loginResponse.LoggedInUser.Pk
-		log.Println(resp.Header["Set-Cookie"])
-		//ig.Cookies = setCookies(resp.Header["Set-Cookie"])
-		cookies = resp.Header["Set-Cookie"]
+		ig.Cookies = resp.Cookies()
 	}
-
-	return 
+	return
 }
-
-//func setCookies(cookies []string) []http.Cookie {
-//	var cookie []http.Cookie
-//}
 
 func (ig *Instagram) GetFeedOf(feedName, tag, maxId string) (json.RawMessage, string, error) {
 	params := HashtagFeedParams{
@@ -358,88 +345,6 @@ func (ig *Instagram) GetLocationIdByName(location, maxId string) ([]constants.Lo
 	return items, resp.NextMaxId, nil
 }
 
-const (
-	SigCsrfToken = "missing"
-	SigDeviceID  = "android-b256317fd493b848"
-	SigKey       = "109513c04303341a7daf27bb41b268e633b30dcc65a3fe14503f743176113869"
-	SigVersion   = "4"
-	AppVersion   = "27.0.0.7.97"
-
-	Scheme   = "https"
-	Hostname = "i.instagram.com"
-
-	InstagramStatusFail = "fail"
-)
-
-func (ig *Instagram) GetUserByNameV2(userName string) (LoggedInUser, error) {
-	url := constants.GetURL("Users", struct{ ID string }{ID: userName})
-
-	sigPayload := &SignaturePayload{
-		Csrftoken:         SigCsrfToken,
-		DeviceID:          SigDeviceID,
-		UUID:              generateUUID(),
-		UserName:          ig.Username,
-		Password:          ig.Password,
-		LoginAttemptCount: 0,
-	}
-	igSigKeyVersion, signedBody, err := generateSignature(sigPayload)
-	if err != nil {
-		return LoggedInUser{}, err
-	}
-	payload := loginRequest{
-		IgSigKeyVersion: igSigKeyVersion,
-		SignedBody:      signedBody,
-	}
-	req := gorequest.New().
-		Post(url).
-		Type("multipart").
-		SendStruct(payload)
-	req.
-		Set("Connection", "close").
-		Set("Accept", "*/*").
-		Set("X-IG-Connection-Type", "WIFI").
-		Set("X-IG-Capabilities", "3QI=").
-		Set("Accept-Language", "en-US").
-		Set("Host", Hostname).
-		Set("User-Agent", "Instagram "+AppVersion+" Android (21/5.1.1; 401dpi; 1080x1920; Oppo; A31u; A31u; en_US)").
-		AddCookies(ig.Cookies)
-	resp, body, errs := req.End()
-
-	if len(errs) > 0 {
-		err = errs[0]
-	}
-	log.Println(resp)
-	log.Println(body)
-	return LoggedInUser{}, nil
-}
-type SignaturePayload struct {
-	Csrftoken         string `json:"_csrftoken"`
-	DeviceID          string `json:"device_id"`
-	UUID              string `json:"_uuid"`
-	UserName          string `json:"username"`
-	Password          string `json:"password"`
-	LoginAttemptCount int    `json:"login_attempt_count"`
-}
-
-func generateUUID() string {
-	return uuid.Must(uuid.NewV4()).String()
-}
-
-func generateSignature(payload *SignaturePayload) (string, string, error) {
-	payloadBytes, _ := json.Marshal(payload)
-
-	h := hmac.New(sha256.New, []byte(SigKey))
-	h.Write(payloadBytes)
-
-	var b []byte
-	hash := hex.EncodeToString(h.Sum(b))
-
-	sigVersion := SigVersion
-	signedBody := hash + "." + string(payloadBytes)
-
-	return sigVersion, signedBody, nil
-}
-
 func (ig *Instagram) GetUserByName(userName string) (LoggedInUser, error) {
 	url := constants.GetURL("Users", struct{ ID string }{ID: userName})
 
@@ -571,7 +476,7 @@ func (ig *Instagram) GetComments(mediaId, maxId string) ([]constants.UserCompeti
 		return nil, "", errors.New(resp.Message)
 	}
 
-	var users [] struct {
+	var users []struct {
 		User constants.UserCompetitor `json:"user"`
 	}
 	if resp.Status == "ok" {
@@ -657,8 +562,8 @@ func (ig *Instagram) CreateSignature() (sigVersion string, signedBody string) {
 		Password          string `json:"password"`
 		LoginAttemptCount int    `json:"login_attempt_count"`
 	}{
-		Csrftoken:         "missing",
-		DeviceID:          "android-b256317fd493b848",
+		Csrftoken:         constants.SigCsrfToken,
+		DeviceID:          constants.SigDeviceID,
 		UUID:              utils.GenerateUUID(),
 		UserName:          ig.Username,
 		Password:          ig.Password,
@@ -670,23 +575,19 @@ func (ig *Instagram) CreateSignature() (sigVersion string, signedBody string) {
 	return utils.GenerateSignature(jsonData)
 }
 
-func (ig *Instagram) SendRequest(agent *gorequest.SuperAgent) (gorequest.Response, string, []error) {
+func (ig *Instagram) SendRequest(agent *gorequest.SuperAgent) (*http.Response, string, []error) {
 	if ig.Proxy != "" {
 		agent.Proxy(ig.Proxy)
 	}
-	transCfg := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // ignore expired SSL certificates
-	}
-	agent.Client = &http.Client{Transport: transCfg}
-	agent.Proxy("http://127.0.0.1:8080")
 	return agent.
-		Timeout(time.Minute).
+		//Timeout(time.Minute).
 		Set("Connection", "close").
 		Set("Accept", "*/*").
 		Set("X-IG-Connection-Type", "WIFI").
 		Set("X-IG-Capabilities", "3QI=").
 		Set("Accept-Language", "en-US").
 		Set("Host", constants.HOSTNAME).
-		Set("User-Agent", "Instagram "+constants.APP_VERSION+" Android (21/5.1.1; 401dpi; 1080x1920; Oppo; A31u; A31u; en_US)").
+		Set("User-Agent", "Instagram "+constants.AppVersion+" Android (21/5.1.1; 401dpi; 1080x1920; Oppo; A31u; A31u; en_US)").
+		AddCookies(ig.Cookies).
 		End()
 }

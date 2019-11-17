@@ -10,13 +10,13 @@ import (
 )
 
 func GenerateSignature(data []byte) (sigVersion string, signedBody string) {
-	h := hmac.New(sha256.New, []byte(constants.SIG_KEY))
+	h := hmac.New(sha256.New, []byte(constants.SigKey))
 	h.Write(data)
 
 	var b []byte
 	hash := hex.EncodeToString(h.Sum(b))
 
-	sigVersion = constants.SIG_VERSION
+	sigVersion = constants.SigVersion
 	signedBody = hash + "." + string(data)
 
 	return sigVersion, signedBody

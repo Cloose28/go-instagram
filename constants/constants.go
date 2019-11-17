@@ -12,6 +12,12 @@ const (
 	APP_VERSION   = "10.8.0"
 	TAG_FEED      = "TagFeed"
 	LOCATION_FEED = "LocationFeed"
+
+	SigCsrfToken = "missing"
+	SigDeviceID  = "android-b256317fd493b848"
+	SigKey       = "109513c04303341a7daf27bb41b268e633b30dcc65a3fe14503f743176113869"
+	SigVersion   = "4"
+	AppVersion   = "27.0.0.7.97"
 )
 
 type UserId struct {
