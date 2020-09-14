@@ -3,10 +3,10 @@ package models
 import (
 	"encoding/json"
 	"errors"
+	"crypto/tls"
 	"fmt"
 	"github.com/Cloose28/go-instagram/constants"
 	"github.com/Cloose28/go-instagram/utils"
-	"github.com/hieven/go-instagram/src/protos"
 	"github.com/parnurzeal/gorequest"
 	"net/http"
 	"strings"
@@ -124,6 +124,7 @@ func (ig *Instagram) Login() (err error) {
 
 		agent := ig.AgentPool.Get()
 		defer ig.AgentPool.Put(agent)
+		agent.Transport.TLSClientConfig = &tls.Config{InsecureSkipVerify:true}
 
 		resp, body, err := ig.SendRequest(agent.Post(constants.ROUTES.Login).
 			Type("multipart").
@@ -280,7 +281,7 @@ func (ig *Instagram) GetLocationSections(id, maxId, sectionTab string) ([]*const
 	agent := ig.AgentPool.Get()
 	defer ig.AgentPool.Put(agent)
 
-	internalReq := &protos.LocationSectionRequest{
+	internalReq := &LocationSectionRequest{
 		UUID: utils.GenerateUUID(),
 		Tab:  sectionTab,
 	}
